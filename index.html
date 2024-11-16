@@ -1,4 +1,4 @@
-<!DOCTYPE html><html><head><base href="."><title>Pocket Monster Catcher</title><style>
+<html><head><base href="."><title>Pocket Monster Catcher</title><style>
 body {
     margin: 0;
     padding: 0 20px;
@@ -7,9 +7,22 @@ body {
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    background: linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.5)), 
-                url('https://jmp.sh/s/YKX2f3j74pHwqKnIGgrB') center/cover no-repeat fixed;
+    background: 
+        linear-gradient(rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.3)),
+        repeating-linear-gradient(
+            45deg,
+            #9ed99e 0px,
+            #9ed99e 2px,
+            #8ecc8e 2px,
+            #8ecc8e 4px
+        ),
+        linear-gradient(
+            to bottom,
+            #a8dda8,
+            #90cc90
+        );
     font-family: Arial, sans-serif;
+    background-attachment: fixed;
 }
 
 button {
@@ -1789,29 +1802,104 @@ function spawnMonster() {
             
             pokemonName.textContent = `${pokemon.name} (${getPokemonRarity(pokemon.base_experience)}) - Attempts: 0/3`;
             
-            const duration = Math.max(2000, 5000 - (pokemon.base_experience * 10));
-            animate(monster, duration, true);
-            animate(target, 3000);
+            // Start animations immediately after Pokemon is loaded
+            startMovement();
             
             playSound('spawnSound');
-            
-            const catchPoint = document.createElement('div');
-            catchPoint.className = 'catch-point';
-            monster.parentNode.appendChild(catchPoint);
-            
-            function updateCatchPoint() {
-                const monsterRect = monster.getBoundingClientRect();
-                const containerRect = gameContainer.getBoundingClientRect();
-                catchPoint.style.left = (monsterRect.left - containerRect.left + monsterRect.width / 2) + 'px';
-                catchPoint.style.top = (monsterRect.top - containerRect.top + monsterRect.height / 2) + 'px';
-                if (!monster.classList.contains('caught')) {
-                    requestAnimationFrame(updateCatchPoint);
-                } else {
-                    catchPoint.remove();
-                }
-            }
-            updateCatchPoint();
         });
+}
+
+// Add new function to handle starting/restarting movement
+function startMovement() {
+    // Stop any existing animations
+    monster.style.animation = 'none';
+    target.style.animation = 'none';
+    
+    // Force reflow
+    void monster.offsetWidth;
+    void target.offsetWidth;
+    
+    // Calculate durations
+    const pokemonDuration = calculatePokemonDuration();
+    const targetDuration = 3000;
+    
+    // Start new animations
+    animate(monster, pokemonDuration, true);
+    animate(target, targetDuration);
+}
+
+// Add helper function to calculate Pokemon speed based on rarity
+function calculatePokemonDuration() {
+    const baseSpeed = 5000;
+    if (!currentPokemon) return baseSpeed;
+    
+    const rarity = getPokemonRarity(currentPokemon.base_experience);
+    const speedMultiplier = {
+        'Common': 1,
+        'Uncommon': 0.8,
+        'Rare': 0.6,
+        'Very Rare': 0.4,
+        'Legendary': 0.2
+    }[rarity] || 1;
+    
+    return baseSpeed * speedMultiplier;
+}
+
+function animate(element, duration, isPokemon = false) {
+    // Remove any existing animation
+    const existingStyle = element.style.animation;
+    if (existingStyle) {
+        element.style.animation = 'none';
+        void element.offsetWidth; // Force reflow
+    }
+    
+    let animationFrames = '';
+    const numPoints = 100;
+    const containerWidth = gameContainer.offsetWidth - element.offsetWidth;
+    const containerHeight = gameContainer.offsetHeight - element.offsetHeight;
+    
+    const centerX = containerWidth / 2;
+    const centerY = containerHeight / 2;
+    
+    // Adjust base scale values based on container size
+    let scaleX = containerWidth * 0.4;
+    let scaleY = containerHeight * 0.3;
+    
+    // Adjust scale for Pokemon based on pokeball size
+    if (isPokemon) {
+        const yScaleMultiplier = {
+            'small': 1,
+            'medium': 1.3,
+            'large': 1.6
+        }[currentPokeballSize] || 1;
+        
+        scaleY *= yScaleMultiplier;
+    }
+    
+    // Generate animation frames
+    for (let i = 0; i <= numPoints; i++) {
+        const percentage = (i * (100 / numPoints));
+        const t = (i / numPoints) * 2 * Math.PI;
+        
+        // Use figure-8 pattern
+        const x = centerX + scaleX * Math.sin(t) / (1 + Math.cos(t) * Math.cos(t));
+        const y = centerY + scaleY * Math.sin(t) * Math.cos(t) / (1 + Math.cos(t) * Math.cos(t));
+        
+        animationFrames += `${percentage}% { left: ${x}px; top: ${y}px; }\n`;
+    }
+
+    // Create and apply animation
+    const animationName = `move${Math.random().toString(36).substr(2, 9)}`;
+    const styleSheet = document.createElement('style');
+    styleSheet.textContent = `
+        @keyframes ${animationName} {
+            ${animationFrames}
+        }
+    `;
+    document.head.appendChild(styleSheet);
+
+    // Apply animation
+    element.style.animation = `${animationName} ${duration}ms linear infinite`;
 }
 
 function skipPokemon() {
@@ -1974,264 +2062,25 @@ function refreshPokeballs() {
     }
 }
 
-function animate(element, duration, isPokemon = false) {
-    let animationFrames = '';
-    const numPoints = 100; 
-    const containerWidth = gameContainer.offsetWidth - element.offsetWidth;
-    const containerHeight = gameContainer.offsetHeight - element.offsetHeight;
-    
-    const centerX = containerWidth / 2;
-    const centerY = containerHeight / 2;
-    
-    // Base scale values
-    let scaleX = containerWidth * 0.4;
-    let scaleY = containerHeight * 0.3;
-    
-    // Adjust Y scale based on pokeball size if this is the Pokemon
-    if (isPokemon) {
-        const yScaleMultiplier = {
-            'small': 1,
-            'medium': 1.3,
-            'large': 1.6
-        }[currentPokeballSize] || 1;
-        
-        scaleY *= yScaleMultiplier;
-    }
-    
-    for (let i = 0; i <= numPoints; i++) {
-        const percentage = (i * (100 / numPoints));
-        const t = (i / numPoints) * 2 * Math.PI;
-        const x = centerX + scaleX * Math.sin(t) / (1 + Math.cos(t) * Math.cos(t));
-        const y = centerY + scaleY * Math.sin(t) * Math.cos(t) / (1 + Math.cos(t) * Math.cos(t));
-        animationFrames += `${percentage}% { left: ${x}px; top: ${y}px; }\n`;
-    }
-
-    const animationName = `move${Math.random().toString(36).substr(2, 9)}`;
-    const styleSheet = document.createElement('style');
-    styleSheet.textContent = `
-        @keyframes ${animationName} {
-            ${animationFrames}
-        }
-    `;
-    document.head.appendChild(styleSheet);
-
-    element.style.animation = `${animationName} ${duration}ms linear infinite`;
-    element.style.position = 'absolute';
-    
-    if (isPokemon && currentPokemon) {
-        const baseSpeed = duration;
-        const rarity = getPokemonRarity(currentPokemon.base_experience);
-        const speedMultiplier = {
-            'Common': 1,
-            'Uncommon': 0.8,
-            'Rare': 0.6,
-            'Very Rare': 0.4,
-            'Legendary': 0.2
-        }[rarity] || 1;
-        
-        element.style.animation = `${animationName} ${baseSpeed * speedMultiplier}ms linear infinite`;
-    }
-}
-
-function selectPokeballSize(size) {
-    currentPokeballSize = size;
-    
-    // Update visual feedback on buttons
-    const buttons = document.querySelectorAll('.size-button');
-    buttons.forEach(button => {
-        button.style.opacity = '0.7';
-        button.style.transform = 'scale(1)';
-    });
-    
-    const selectedButton = document.querySelector(`.size-button${size === 'medium' ? '.medium-ball' : size === 'large' ? '.large-ball' : ''}`);
-    if (selectedButton) {
-        selectedButton.style.opacity = '1';
-        selectedButton.style.transform = 'scale(1.1)';
-    }
-    
-    // Update target size
-    const target = document.querySelector('.target');
-    target.className = `target ${size}`;
-    
-    // Re-animate the Pokemon with new height
-    if (currentPokemon) {
-        animate(monster, 3000, true);
-    }
-    
-    playSound('clickSound');
-}
-
-function updateLeaderboard() {
-    const leaderboardBody = document.getElementById('leaderboardBody');
-    leaderboardBody.innerHTML = '';
-
-    // Get stored leaderboard data or use default
-    const leaderboardData = JSON.parse(localStorage.getItem(LEADERBOARD_KEY) || '[]');
-    
-    // Add current player's data if not already present
-    const currentPlayer = {
-        name: 'You', // Could be replaced with actual username if implemented
-        totalAttempts,
-        successfulCatches,
-        successRate: totalAttempts > 0 ? ((successfulCatches / totalAttempts) * 100).toFixed(1) : '0'
-    };
-
-    // Update current player's data in leaderboard
-    const existingPlayerIndex = leaderboardData.findIndex(player => player.name === 'You');
-    if (existingPlayerIndex !== -1) {
-        leaderboardData[existingPlayerIndex] = currentPlayer;
-    } else {
-        leaderboardData.push(currentPlayer);
-    }
-
-    // Add some dummy data for demonstration if leaderboard is empty
-    if (leaderboardData.length < 2) {
-        leaderboardData.push(
-            {name: 'Ash', totalAttempts: 125, successfulCatches: 95, successRate: '76.0'},
-            {name: 'Misty', totalAttempts: 89, successfulCatches: 67, successRate: '75.3'},
-            {name: 'Brock', totalAttempts: 156, successfulCatches: 112, successRate: '71.8'}
-        );
-    }
-
-    // Sort by success rate
-    leaderboardData.sort((a, b) => parseFloat(b.successRate) - parseFloat(a.successRate));
-
-    // Update the display
-    leaderboardData.forEach((player, index) => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${player.name}${player.name === 'You' ? ' (You)' : ''}</td>
-            <td>${player.totalAttempts}</td>
-            <td>${player.successfulCatches}</td>
-            <td>${player.successRate}%</td>
-        `;
-        if (player.name === 'You') {
-            row.style.backgroundColor = 'rgba(46, 204, 113, 0.1)';
-            row.style.fontWeight = 'bold';
-        }
-        leaderboardBody.appendChild(row);
-    });
-
-    // Save updated leaderboard
-    localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(leaderboardData));
-}
-
-function updateDashboard() {
-    // Update total attempts display
-    const totalAttemptsElement = document.getElementById('totalAttempts');
-    if (totalAttemptsElement) {
-        totalAttemptsElement.textContent = totalAttempts;
-    }
-
-    // Update successful catches display
-    const successfulCatchesElement = document.getElementById('successfulCatches');
-    if (successfulCatchesElement) {
-        successfulCatchesElement.textContent = successfulCatches;
-    }
-
-    // Update success rate display
-    const successRateElement = document.getElementById('successRate');
-    if (successRateElement) {
-        const rate = totalAttempts > 0 ? ((successfulCatches / totalAttempts) * 100).toFixed(1) : '0';
-        successRateElement.textContent = rate + '%';
-    }
-}
-
-function updateUpgradeOptions() {
-    const select = document.getElementById('upgradeSelect');
-    const button = document.getElementById('upgradeButton');
-    const message = document.getElementById('upgradeMessage');
-
-    // Clear existing options
-    select.innerHTML = '<option value="">Select a Pokémon</option>';
-
-    // Get inventory items and count duplicates
-    const inventoryContainer = document.getElementById('inventory');
-    const items = inventoryContainer.querySelectorAll('.inventory-item');
-    const pokemonCounts = {};
-    
-    items.forEach(item => {
-        const name = item.querySelector('.name').textContent;
-        pokemonCounts[name] = (pokemonCounts[name] || 0) + 1;
-    });
-
-    // Add options for pokemon with 2 or more copies
-    Object.entries(pokemonCounts).forEach(([name, count]) => {
-        if (count >= 2) {
-            const option = document.createElement('option');
-            option.value = name;
-            option.textContent = `${name} (${count} available)`;
-            select.appendChild(option);
-        }
-    });
-    
-    // Update button state
-    button.disabled = select.value === '';
-    message.textContent = '';
-    
-    // Add change handler for select
-    select.onchange = () => {
-        button.disabled = select.value === '';
-    };
-    
-    // Add click handler for upgrade button
-    button.onclick = () => {
-        const selectedPokemon = select.value;
-        if (selectedPokemon && pokemonCounts[selectedPokemon] >= 2) {
-            // Remove 2 copies of the pokemon
-            let removed = 0;
-            const items = Array.from(inventoryContainer.querySelectorAll('.inventory-item'));
-            for (let item of items) {
-                if (item.querySelector('.name').textContent === selectedPokemon && removed < 2) {
-                    item.remove();
-                    removed++;
-                }
-            }
-            
-            // Add one upgraded version
-            const upgradeMsg = document.createElement('div');
-            upgradeMsg.classList.add('success-message');
-            upgradeMsg.textContent = `Successfully upgraded ${selectedPokemon}!`;
-            gameContainer.appendChild(upgradeMsg);
-            setTimeout(() => upgradeMsg.remove(), 2000);
-            
-            // Update inventory display
-            updateInventoryDisplay();
-            
-            // Reset select and button
-            select.value = '';
-            button.disabled = true;
-            updateUpgradeOptions();
-            
-            playSound('clickSound');
-        }
-    };
-}
-
 document.addEventListener('DOMContentLoaded', () => {
     loadGameData();
-    spawnMonster();
     updatePokeballs();
+    spawnMonster(); // This will now start the animations properly
     
-    // Add spacebar handler
+    // Add spacebar and click handlers for catching
     document.addEventListener('keydown', (e) => {
         if (e.code === 'Space') {
             attemptCatch();
         }
     });
-
-    // Add click handler for shooting area
-    const gameContainer = document.getElementById('gameContainer');
-    gameContainer.addEventListener('click', (e) => {
+    
+    document.getElementById('gameContainer').addEventListener('click', (e) => {
         if (e.target.classList.contains('shooting_area')) {
-            attemptCatch(); 
+            attemptCatch();
         }
     });
-
-    // Add catch button click handler 
-    const catchButton = document.getElementById('catchButton');
-    if (catchButton) {
-        catchButton.addEventListener('click', attemptCatch);
-    }
+    
+    document.getElementById('catchButton').addEventListener('click', attemptCatch);
 });
-</script></body></html>
+</script>
+</body></html>
